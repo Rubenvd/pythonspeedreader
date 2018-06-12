@@ -58,6 +58,9 @@ class SpeedReader:
     def scroll_text(self):
         for line in self.text.split("\n"):
             for word in line.strip().split(" "):
+                if len(word) == 0:
+                    continue
+
                 first, middle, last = self.split_word(word)
 
                 self.screen.fill(self.background)
