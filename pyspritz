@@ -5,73 +5,105 @@ import time
 import os
 import subprocess
 
-class constants:
+
+class Constants:
     WHITE = (255, 255, 255)
     GRAY = (40, 40, 40)
     RED = (255, 0, 0)
     WPM = 250.0
-    CONFIG = os.getenv("HOME") + "/.config/wpm"
-
-def dink():
-    try:
-        wpmfile = open("/home/rubvd/.config/wpm", "r")
-        WPM = float(wpmfile.read())
-        wpmfile.close()
-    except:
-        print "da's ni goe"
-        pass
-
-    f = subprocess.Popen(['xclip', '-o'], stdout=subprocess.PIPE).communicate()[0]
-    f = f.decode("utf-8").strip()
-    if len(f) == 0:
-        exit(0)
-
-
 
     MIDDLE = 300
     HEIGHT = 80
-    pygame.font.init()
-    screen = pygame.display.set_mode((800, 200))
-    background = WHITE
-    screen.fill(background)
-    myfont = pygame.font.Font("/usr/share/fonts/TTF/DejaVuSans.ttf", 40)
 
-    for line in f.split("\n"):
-        for word in line.strip().split(" "):
-            part = len(word) * 2 / 5
-            first = myfont.render(word[:part], 1, GRAY)
-            middle = myfont.render(word[part], 1, RED)
-            last = myfont.render(word[(part + 1):], 1, GRAY)
-            screen.fill(background)
-            text = myfont.render(word, 1, (0, 0, 0))
+    CONFIG = os.getenv("HOME") + "/.config/wpm"
 
-            screen.blit(first, (MIDDLE - (middle.get_width() / 2) - first.get_width(), HEIGHT))
-            screen.blit(middle, (MIDDLE - (middle.get_width() / 2), HEIGHT))
-            screen.blit(last, (MIDDLE + (middle.get_width() / 2), HEIGHT))
-            pygame.draw.line(screen, RED, (MIDDLE, 30), (MIDDLE, 70), 1)
-            pygame.draw.line(screen, RED, (MIDDLE, 130), (MIDDLE, 170), 1)
 
-            pygame.display.update()
-            events = pygame.event.get()
-            for event in events:
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        womp = open("/home/rubvd/.config/wpm", "w")
-                        womp.write(str(WPM))
-                        womp.close()
-                        exit(0)
-                    if event.key == pygame.K_LEFT:
-                        WPM -= 25
-                    if event.key == pygame.K_RIGHT:
-                        WPM += 25
-            time.sleep(60.0 / WPM)
-    time.sleep(1)
-    womp = open("/home/rubvd/.config/wpm", "w")
-    womp.write(str(WPM))
-    womp.close()
-    womp.close()
-    pygame.display.quit()
+class SpeedReader:
+    def __init__(self):
+        self.paused = False
+        self.wpm = self.read_wpm()
+        self.text = self.get_text_to_read()
+        self.init_userinterface()
+        self.scroll_text()
+        self.save_config()
+        time.sleep(1)
+        self.close_userinterface()
+
+    def read_wpm(self):
+        try:
+            wpmfile = open(Constants.CONFIG, "r")
+            wpm = float(wpmfile.read())
+            wpmfile.close()
+            return wpm
+        except:
+            print "Could not read config file. Creating a new one."
+            return 250.0
+
+    def get_text_to_read(self):
+        text = subprocess.Popen(['xclip', '-o'], stdout=subprocess.PIPE).communicate()[0]
+        text = text.decode("utf-8").strip()
+        if len(text) == 0:
+            exit(0)
+        return text.strip()
+
+    def init_userinterface(self):
+        pygame.font.init()
+        self.screen = pygame.display.set_mode((800, 200))
+        self.background = Constants.WHITE
+        self.font = pygame.font.Font("/usr/share/fonts/TTF/DejaVuSans.ttf", 40)
+
+    def close_userinterface(self):
+        pygame.display.quit()
+
+    def scroll_text(self):
+        for line in self.text.split("\n"):
+            for word in line.strip().split(" "):
+                first, middle, last = self.split_word(word)
+
+                self.screen.fill(self.background)
+                self.screen.blit(first, (Constants.MIDDLE - (middle.get_width() / 2) - first.get_width(), Constants.HEIGHT))
+                self.screen.blit(middle, (Constants.MIDDLE - (middle.get_width() / 2), Constants.HEIGHT))
+                self.screen.blit(last, (Constants.MIDDLE + (middle.get_width() / 2), Constants.HEIGHT))
+
+                pygame.draw.line(self.screen, Constants.RED, (Constants.MIDDLE, 30), (Constants.MIDDLE, 70), 1)
+                pygame.draw.line(self.screen, Constants.RED, (Constants.MIDDLE, 130), (Constants.MIDDLE, 170), 1)
+
+                pygame.display.update()
+                self.read_event_queue()
+
+                while self.paused:
+                    self.read_event_queue()
+                    time.sleep(0.2)
+
+                time.sleep(60.0 / self.wpm)
+
+    def read_event_queue(self):
+        events = pygame.event.get()
+
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    exit(0)
+                if event.key == pygame.K_LEFT:
+                    self.wpm -= 25
+                if event.key == pygame.K_RIGHT:
+                    self.wpm += 25
+                if event.key == pygame.K_SPACE:
+                    self.paused = not self.paused
+
+
+    def split_word(self, word):
+        part = len(word) * 2 / 5
+        first = self.font.render(word[:part], 1, Constants.GRAY)
+        middle = self.font.render(word[part], 1, Constants.RED)
+        last = self.font.render(word[(part + 1):], 1, Constants.GRAY)
+        return first, middle, last
+
+    def save_config(self):
+        womp = open(Constants.CONFIG, "w")
+        womp.write(str(self.wpm))
+        womp.close()
+
 
 if __name__ == "__main__":
-    print constants.CONFIG
-
+    reader = SpeedReader()
