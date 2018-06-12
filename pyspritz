@@ -1,0 +1,67 @@
+#!/usr/bin/python2
+
+import pygame
+import time
+import subprocess
+
+WPM = 250.0
+try:
+    wpmfile = open("/home/rubvd/.config/wpm", "r")
+    WPM = float(wpmfile.read())
+    wpmfile.close()
+except:
+    print "da's ni goe"
+    pass
+
+f = subprocess.Popen(['xclip', '-o'], stdout=subprocess.PIPE).communicate()[0]
+f = f.decode("utf-8").strip()
+if len(f) == 0:
+    exit(0)
+
+WHITE = (255, 255, 255)
+GRAY = (40, 40, 40)
+RED = (255, 0, 0)
+
+MIDDLE = 300
+HEIGHT = 80
+pygame.font.init()
+screen = pygame.display.set_mode((800, 200))
+background = WHITE
+screen.fill(background)
+myfont = pygame.font.Font("/usr/share/fonts/TTF/DejaVuSans.ttf", 40)
+
+for line in f.split("\n"):
+    for word in line.strip().split(" "):
+        part = len(word) * 2 / 5
+        first = myfont.render(word[:part], 1, GRAY)
+        middle = myfont.render(word[part], 1, RED)
+        last = myfont.render(word[(part + 1):], 1, GRAY)
+        screen.fill(background)
+        text = myfont.render(word, 1, (0, 0, 0))
+
+        screen.blit(first, (MIDDLE - (middle.get_width() / 2) - first.get_width(), HEIGHT))
+        screen.blit(middle, (MIDDLE - (middle.get_width() / 2), HEIGHT))
+        screen.blit(last, (MIDDLE + (middle.get_width() / 2), HEIGHT))
+        pygame.draw.line(screen, RED, (MIDDLE, 30), (MIDDLE, 70), 1)
+        pygame.draw.line(screen, RED, (MIDDLE, 130), (MIDDLE, 170), 1)
+
+        pygame.display.update()
+        events = pygame.event.get()
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    womp = open("/home/rubvd/.config/wpm", "w")
+                    womp.write(str(WPM))
+                    womp.close()
+                    exit(0)
+                if event.key == pygame.K_LEFT:
+                    WPM -= 25
+                if event.key == pygame.K_RIGHT:
+                    WPM += 25
+        time.sleep(60.0 / WPM)
+time.sleep(1)
+womp = open("/home/rubvd/.config/wpm", "w")
+womp.write(str(WPM))
+womp.close()
+womp.close()
+pygame.display.quit()
