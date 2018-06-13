@@ -56,6 +56,7 @@ class SpeedReader:
         pygame.display.quit()
 
     def scroll_text(self):
+        self.first = True
         for line in self.text.split("\n"):
             for word in line.strip().split(" "):
                 if len(word) == 0:
@@ -73,6 +74,10 @@ class SpeedReader:
 
                 pygame.display.update()
                 self.read_event_queue()
+
+                if self.first:
+                    time.sleep(1)
+                    self.first = False
 
                 while self.paused:
                     self.read_event_queue()
