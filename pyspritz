@@ -78,6 +78,9 @@ class SpeedReader:
                     self.read_event_queue()
                     time.sleep(0.2)
 
+                if word[-1] == '.':
+                    time.sleep(3.0 * 60.0 / self.wpm)
+
                 time.sleep(60.0 / self.wpm)
 
     def read_event_queue(self):
