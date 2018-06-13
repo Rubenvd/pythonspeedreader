@@ -5,5 +5,5 @@ Left and right button change speed.
 
 Pressing space will pause.
 
-Requires pygame and xclip. Written in python2.
+Requires pygame and xclip. Written in python2. Possibly it will fail because it can't find the ttf. Just adapt the script if so.
 
