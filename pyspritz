@@ -104,7 +104,7 @@ class SpeedReader:
 
 
     def split_word(self, word):
-        part = len(word) * 2 / 5
+        part = len(word) * 1 / 3
         first = self.font.render(word[:part], 1, Constants.GRAY)
         middle = self.font.render(word[part], 1, Constants.RED)
         last = self.font.render(word[(part + 1):], 1, Constants.GRAY)
