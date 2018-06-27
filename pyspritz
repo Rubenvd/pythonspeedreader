@@ -57,11 +57,13 @@ class SpeedReader:
 
     def scroll_text(self):
         self.first = True
+        self.slept = False
         for line in self.text.split("\n"):
             for word in line.strip().split(" "):
                 if len(word) == 0:
                     continue
 
+                self.slept = False
                 first, middle, last = self.split_word(word)
 
                 self.screen.fill(self.background)
@@ -85,8 +87,12 @@ class SpeedReader:
 
                 if word[-1] == '.':
                     time.sleep(3.0 * 60.0 / self.wpm)
+                    self.slept = True
 
                 time.sleep(60.0 / self.wpm)
+   
+            if not self.slept:
+                time.sleep(3.0 * 60.0 / self.wpm)
 
     def read_event_queue(self):
         events = pygame.event.get()
