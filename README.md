@@ -4,6 +4,10 @@ A simple ugly speed reader using spritzlet method of speed reading. I wrote it b
 Just select text and execute the program. I myself created a shortcut for this on my keyboard.
 Left and right button change speed.
 Pressing space will pause.
+Pressing U will decrease the font size.
+Pressing I will increase the font size.
+Pressing up will increase the amount of words displayed at once.
+Pressing down will decrease the amount of words displayed at once.
 
-Requires pygame and xclip. Written in python2. Possibly it will fail because it can't find the ttf. Just adapt the script if so.
+Requires pygame and xclip. Written in python2.
 

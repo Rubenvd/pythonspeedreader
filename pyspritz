@@ -1,6 +1,7 @@
 #!/usr/bin/python2
 
 import pygame
+import json
 import time
 import os
 import subprocess
@@ -10,89 +11,183 @@ class Constants:
     WHITE = (255, 255, 255)
     GRAY = (40, 40, 40)
     RED = (255, 0, 0)
-    WPM = 250.0
 
-    MIDDLE = 300
-    HEIGHT = 80
+    CONFIG = os.getenv("HOME") + "/.config/pyspritz"
 
-    CONFIG = os.getenv("HOME") + "/.config/wpm"
 
+class Defaults:
+    WPM = 250
+    FONT_SIZE = 40
+    GROUP_SIZE = 1
+
+
+class Config:
+    def __init__(self):
+        self.wpm = Defaults.WPM
+        self.font_size = Defaults.FONT_SIZE
+        self.group_size = Defaults.GROUP_SIZE
+        try:
+            config_file = open(Constants.CONFIG, "r")
+            config_json = json.load(config_file)
+            config_file.close()
+            self.wpm = config_json['wpm']
+            self.font_size = config_json['font_size']
+            self.group_size = config_json['group_size']
+        except:
+            print 'Could not read config file. Creating a new one.'
+
+    def save(self):
+        try:
+            config_file = open(Constants.CONFIG, "w")
+            config_dict = {}
+            config_dict['wpm'] = self.wpm
+            config_dict['font_size'] = self.font_size
+            config_dict['group_size'] = self.group_size
+            json.dump(config_dict, config_file)
+
+            config_file.close()
+        except:
+            print 'Could not save config file.'
+
+class TextIterator:
+    def __init__(self, text):
+        self._text = text
+        self._index = 0
+
+    def next(self):
+        if self._index < self._text.size():
+            ret_val = self._text[self._index]
+            self._index += 1
+            return ret_val
+        raise StopIteration
+
+class Text:
+    def __init__(self, text):
+        self._text = [w for w in text.split() if w != '']
+        self._group_size = 1
+        self._size = self._calc_size()
+
+    def set_group_size(self, group_size):
+        self._group_size = group_size
+        self._size = self._calc_size()
+
+    def __iter__(self):
+        return TextIterator(self)
+
+    def size(self):
+        return self._size
+
+    def __getitem__(self, index):
+        start = index * self._group_size
+        end = min(self._group_size*(index+1), len(self._text))
+        return ' '.join(self._text[start:end])
+
+    def _calc_size(self):
+        return (len(self._text) / self._group_size) + (len(self._text) % self._group_size > 0)
+
+
+class UserInterface:
+    def __init__(self, font_size, text):
+        pygame.font.init()
+        self._font = pygame.font.Font(pygame.font.match_font('dejavusans'), font_size)
+        self._text_height = font_size
+        width = 100
+        height = self._text_height * 5
+
+        for text_group in text:
+            render_object = self._font.render(text_group, 1, Constants.GRAY)
+            width = max(render_object.get_width() + 200, width)
+
+        self._screen = pygame.display.set_mode((width, height), pygame.NOFRAME)
+        self._splitter_pos = width / 3
+
+    def set_text(self, text):
+        first, middle, last = self._create_render_objects(text)
+        self._screen.fill(Constants.WHITE)
+        self._screen.blit(first, (self._splitter_pos - (middle.get_width() / 2) - first.get_width(), self._text_height * 2))
+        self._screen.blit(middle, (self._splitter_pos - (middle.get_width() / 2), self._text_height * 2))
+        self._screen.blit(last, (self._splitter_pos + (middle.get_width() / 2), self._text_height * 2))
+
+        pygame.draw.line(self._screen, Constants.RED, (self._splitter_pos, self._text_height* 3/4), (self._splitter_pos, self._text_height*7/4), 2)
+        pygame.draw.line(self._screen, Constants.RED, (self._splitter_pos, self._text_height*13/4), (self._splitter_pos, self._text_height*17/4), 2)
+
+        pygame.display.update()
+
+    def _create_render_objects(self, text):
+        part = len(text) / 3
+        if text[part] == ' ':
+            part += 1
+        first = self._font.render(text[:part], 1, Constants.GRAY)
+        middle = self._font.render(text[part], 1, Constants.RED)
+        last = self._font.render(text[(part + 1):], 1, Constants.GRAY)
+        return first, middle, last
+
+    def __del__(self):
+        pygame.display.quit()
 
 class SpeedReader:
     def __init__(self):
-        self.paused = False
-        self.wpm = self.read_wpm()
-        self.text = self.get_text_to_read()
-        self.init_userinterface()
-        self.scroll_text()
-        self.save_config()
-        time.sleep(1)
-        self.close_userinterface()
+        self._config = Config()
+        self._text = Text(self.get_text_to_read())
+        self._text.set_group_size(self._config.group_size)
+        self._close = False
+        self._paused = False
+        self._restart = False
 
-    def read_wpm(self):
-        try:
-            wpmfile = open(Constants.CONFIG, "r")
-            wpm = float(wpmfile.read())
-            wpmfile.close()
-            return wpm
-        except:
-            print "Could not read config file. Creating a new one."
-            return 250.0
+    def __del__(self):
+        self._config.save()
+        time.sleep(1)
+
+    def get_text_size(self):
+        return self._text.size()
+
+    def read(self):
+        while not self.scroll_text():
+            pass
 
     def get_text_to_read(self):
         text = subprocess.Popen(['xclip', '-o'], stdout=subprocess.PIPE).communicate()[0]
         text = text.decode("utf-8").strip()
-        if len(text) == 0:
-            exit(0)
         return text.strip()
 
     def init_userinterface(self):
         pygame.font.init()
-        self.screen = pygame.display.set_mode((800, 200))
-        self.background = Constants.WHITE
-        self.font = pygame.font.Font("/usr/share/fonts/TTF/DejaVuSans.ttf", 40)
+        self._screen = pygame.display.set_mode((800, 200))
+        self._font = pygame.font.Font(pygame.font.match_font('dejavusans'), 40)
 
     def close_userinterface(self):
         pygame.display.quit()
 
     def scroll_text(self):
-        self.first = True
-        self.slept = False
-        for line in self.text.split("\n"):
-            for word in line.strip().split(" "):
-                if len(word) == 0:
-                    continue
+        self._close = False
+        self._paused = False
+        self._restart = False
+        self._text.set_group_size(self._config.group_size)
 
-                self.slept = False
-                first, middle, last = self.split_word(word)
+        ui = UserInterface(self._config.font_size, self._text)
 
-                self.screen.fill(self.background)
-                self.screen.blit(first, (Constants.MIDDLE - (middle.get_width() / 2) - first.get_width(), Constants.HEIGHT))
-                self.screen.blit(middle, (Constants.MIDDLE - (middle.get_width() / 2), Constants.HEIGHT))
-                self.screen.blit(last, (Constants.MIDDLE + (middle.get_width() / 2), Constants.HEIGHT))
+        # We display the first word a bit longer
+        ui.set_text(self._text[0])
 
-                pygame.draw.line(self.screen, Constants.RED, (Constants.MIDDLE, 30), (Constants.MIDDLE, 70), 1)
-                pygame.draw.line(self.screen, Constants.RED, (Constants.MIDDLE, 130), (Constants.MIDDLE, 170), 1)
+        for group in self._text:
+            self.read_event_queue()
+            self.sleepytime()
+            self.read_event_queue()
 
-                pygame.display.update()
-                self.read_event_queue()
+            if self._close:
+                return True
+            if self._restart:
+                return False
+            ui.set_text(group)
 
-                if self.first:
-                    time.sleep(1)
-                    self.first = False
+        self.sleepytime()
+        return True
 
-                while self.paused:
-                    self.read_event_queue()
-                    time.sleep(0.2)
-
-                if word[-1] == '.':
-                    time.sleep(3.0 * 60.0 / self.wpm)
-                    self.slept = True
-
-                time.sleep(60.0 / self.wpm)
-   
-            if not self.slept:
-                time.sleep(3.0 * 60.0 / self.wpm)
+    def sleepytime(self):
+        time.sleep(60.0 * self._config.group_size / self._config.wpm)
+        while self._paused and not self._close and not self._restart:
+            self.read_event_queue()
+            time.sleep(0.1)
 
     def read_event_queue(self):
         events = pygame.event.get()
@@ -100,27 +195,60 @@ class SpeedReader:
         for event in events:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    exit(0)
+                    self._close = True
+
                 if event.key == pygame.K_LEFT:
-                    self.wpm -= 25
+                    self._config.wpm -= 15
+
                 if event.key == pygame.K_RIGHT:
-                    self.wpm += 25
+                    self._config.wpm += 15
+
+                if event.key == pygame.K_UP:
+                    self._config.group_size = min(5, self._config.group_size + 1)
+                    self._restart = True
+
+                if event.key == pygame.K_DOWN:
+                    self._config.group_size = max(1, self._config.group_size - 1)
+                    self._restart = True
+
                 if event.key == pygame.K_SPACE:
-                    self.paused = not self.paused
+                    self._paused = not self._paused
+
+                if event.key == pygame.K_u:
+                    self._config.font_size = max(self._config.font_size-2, 20)
+                    self._restart = True
+
+                if event.key == pygame.K_i:
+                    self._config.font_size += 2
+                    self._restart = True
 
 
-    def split_word(self, word):
-        part = len(word) * 1 / 3
-        first = self.font.render(word[:part], 1, Constants.GRAY)
-        middle = self.font.render(word[part], 1, Constants.RED)
-        last = self.font.render(word[(part + 1):], 1, Constants.GRAY)
-        return first, middle, last
+def which(program):
+    import os
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
 
-    def save_config(self):
-        womp = open(Constants.CONFIG, "w")
-        womp.write(str(self.wpm))
-        womp.close()
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
 
+    return None
 
 if __name__ == "__main__":
+    if which('xclip') == None:
+        print("Please install xclip.")
+        exit(-1)
+
     reader = SpeedReader()
+
+    if reader.get_text_size() == 0:
+        print("Can't read text of zero length. Please select a text to read.")
+        exit(-1)
+
+    reader.read()
