@@ -1,17 +1,19 @@
 #!/usr/bin/python2
 
-import pygame
+import getopt
 import json
-import time
 import os
+import pygame
 import subprocess
+import sys
+import time
 
 
 class Constants:
-    WHITE = (255, 255, 255)
-    GRAY = (40, 40, 40)
+    BLACK = (0, 0, 0)
+    GRAY = (100, 100, 100)
     RED = (255, 0, 0)
-
+    WHITE = (255, 255, 255)
     CONFIG = os.getenv("HOME") + "/.config/pyspritz"
 
 
@@ -31,23 +33,19 @@ class Config:
             config_json = json.load(config_file)
             config_file.close()
             self.wpm = config_json['wpm']
-            self.font_size = config_json['font_size']
-            self.group_size = config_json['group_size']
         except:
             print 'Could not read config file. Creating a new one.'
 
     def save(self):
-        try:
-            config_file = open(Constants.CONFIG, "w")
-            config_dict = {}
-            config_dict['wpm'] = self.wpm
-            config_dict['font_size'] = self.font_size
-            config_dict['group_size'] = self.group_size
-            json.dump(config_dict, config_file)
+        #try:
+        config_file = open(Constants.CONFIG, "w")
+        config_dict = {}
+        config_dict['wpm'] = self.wpm
+        json.dump(config_dict, config_file)
 
-            config_file.close()
-        except:
-            print 'Could not save config file.'
+        config_file.close()
+        #except:
+        #    print 'Could not save config file.'
 
 class TextIterator:
     def __init__(self, text):
@@ -62,34 +60,63 @@ class TextIterator:
         raise StopIteration
 
 class Text:
-    def __init__(self, text):
-        self._text = [w for w in text.split() if w != '']
-        self._group_size = 1
-        self._size = self._calc_size()
+    def __init__(self, text, group_size):
+        self._text_blocks = []
+        self._text = text
+        self._group_size = group_size
+        self._adapt_for_group_size()
 
     def set_group_size(self, group_size):
         self._group_size = group_size
-        self._size = self._calc_size()
+        self._adapt_for_group_size()
 
     def __iter__(self):
         return TextIterator(self)
 
     def size(self):
-        return self._size
+        return len(self._text_blocks)
 
     def __getitem__(self, index):
-        start = index * self._group_size
-        end = min(self._group_size*(index+1), len(self._text))
-        return ' '.join(self._text[start:end])
+        return self._text_blocks[index]
 
-    def _calc_size(self):
-        return (len(self._text) / self._group_size) + (len(self._text) % self._group_size > 0)
+    def _adapt_for_group_size(self):
+        pass
+
+
+class SimpleText(Text):
+    def _adapt_for_group_size(self):
+        self._text_blocks = []
+        segments = [w for w in self._text.split() if w != '']
+        index = 0
+        for index in range(0, (len(segments)/self._group_size) + (len(segments) % self._group_size > 0)):
+            start = index * self._group_size
+            end = min(self._group_size*(index+1), len(segments))
+            self._text_blocks += [' '.join(segments[start:end])]
+
+class SmartText(Text):
+    def _adapt_for_group_size(self):
+        self._text_blocks = []
+        segments = [w for w in self._text.split() if w != '']
+        text_block = ''
+        for seg in segments:
+            if text_block == '':
+                text_block = seg
+            else:
+                new_block = ' '.join([text_block, seg])
+                if len(new_block) > group_size:
+                    self._text_blocks += [text_block]
+                    text_block = seg
+                else:
+                    text_block = new_block
+
+        if text_block != '':
+            self._text_blocks += [text_block]
 
 
 class UserInterface:
     def __init__(self, font_size, text):
         pygame.font.init()
-        self._font = pygame.font.Font(pygame.font.match_font('dejavusans'), font_size)
+        self._font = pygame.font.Font(self._select_font(), font_size)
         self._text_height = font_size
         width = 100
         height = self._text_height * 5
@@ -104,12 +131,17 @@ class UserInterface:
     def set_text(self, text):
         first, middle, last = self._create_render_objects(text)
         self._screen.fill(Constants.WHITE)
+        w, h = pygame.display.get_surface().get_size()
+        pygame.draw.line(self._screen, Constants.BLACK, (0, 0), (w, 0), 2)
+        pygame.draw.line(self._screen, Constants.BLACK, (0, h-2), (w, h-2), 2)
+        pygame.draw.line(self._screen, Constants.BLACK, (0, 0), (0, h), 2)
+        pygame.draw.line(self._screen, Constants.BLACK, (w-2, 0), (w-2, h), 2)
+        pygame.draw.line(self._screen, Constants.RED, (self._splitter_pos, self._text_height* 3/4), (self._splitter_pos, self._text_height*7/4), 2)
+        pygame.draw.line(self._screen, Constants.RED, (self._splitter_pos, self._text_height*13/4), (self._splitter_pos, self._text_height*17/4), 2)
+
         self._screen.blit(first, (self._splitter_pos - (middle.get_width() / 2) - first.get_width(), self._text_height * 2))
         self._screen.blit(middle, (self._splitter_pos - (middle.get_width() / 2), self._text_height * 2))
         self._screen.blit(last, (self._splitter_pos + (middle.get_width() / 2), self._text_height * 2))
-
-        pygame.draw.line(self._screen, Constants.RED, (self._splitter_pos, self._text_height* 3/4), (self._splitter_pos, self._text_height*7/4), 2)
-        pygame.draw.line(self._screen, Constants.RED, (self._splitter_pos, self._text_height*13/4), (self._splitter_pos, self._text_height*17/4), 2)
 
         pygame.display.update()
 
@@ -122,21 +154,28 @@ class UserInterface:
         last = self._font.render(text[(part + 1):], 1, Constants.GRAY)
         return first, middle, last
 
+    def _select_font(self):
+        font = pygame.font.match_font('gentium')
+        if font != None:
+            return font
+        font = pygame.font.match_font('freeserif')
+        if font != None:
+            return font
+        return pygame.font.match_font('dejavusans')
+
     def __del__(self):
         pygame.display.quit()
 
 class SpeedReader:
-    def __init__(self):
+    def __init__(self, font_size, group_size, smart):
         self._config = Config()
-        self._text = Text(self.get_text_to_read())
-        self._text.set_group_size(self._config.group_size)
+        self._config.font_size = font_size
+        self._config.group_size = group_size
+
+        self._text = self.create_text_object(smart)
         self._close = False
         self._paused = False
         self._restart = False
-
-    def __del__(self):
-        self._config.save()
-        time.sleep(1)
 
     def get_text_size(self):
         return self._text.size()
@@ -144,25 +183,24 @@ class SpeedReader:
     def read(self):
         while not self.scroll_text():
             pass
+        self._config.save()
+        time.sleep(1)
+
+    def create_text_object(self, smart):
+        if smart:
+            return SmartText(self.get_text_to_read(), self._config.group_size)
+        else:
+            return SimpleText(self.get_text_to_read(), self._config.group_size)
 
     def get_text_to_read(self):
         text = subprocess.Popen(['xclip', '-o'], stdout=subprocess.PIPE).communicate()[0]
         text = text.decode("utf-8").strip()
         return text.strip()
 
-    def init_userinterface(self):
-        pygame.font.init()
-        self._screen = pygame.display.set_mode((800, 200))
-        self._font = pygame.font.Font(pygame.font.match_font('dejavusans'), 40)
-
-    def close_userinterface(self):
-        pygame.display.quit()
-
     def scroll_text(self):
         self._close = False
         self._paused = False
         self._restart = False
-        self._text.set_group_size(self._config.group_size)
 
         ui = UserInterface(self._config.font_size, self._text)
 
@@ -184,7 +222,7 @@ class SpeedReader:
         return True
 
     def sleepytime(self):
-        time.sleep(60.0 * self._config.group_size / self._config.wpm)
+        time.sleep(60.0 / self._config.wpm)
         while self._paused and not self._close and not self._restart:
             self.read_event_queue()
             time.sleep(0.1)
@@ -196,30 +234,13 @@ class SpeedReader:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self._close = True
-
                 if event.key == pygame.K_LEFT:
                     self._config.wpm -= 15
-
                 if event.key == pygame.K_RIGHT:
                     self._config.wpm += 15
-
-                if event.key == pygame.K_UP:
-                    self._config.group_size = min(5, self._config.group_size + 1)
-                    self._restart = True
-
-                if event.key == pygame.K_DOWN:
-                    self._config.group_size = max(1, self._config.group_size - 1)
-                    self._restart = True
-
                 if event.key == pygame.K_SPACE:
                     self._paused = not self._paused
-
-                if event.key == pygame.K_u:
-                    self._config.font_size = max(self._config.font_size-2, 20)
-                    self._restart = True
-
-                if event.key == pygame.K_i:
-                    self._config.font_size += 2
+                if event.key == pygame.K_r:
                     self._restart = True
 
 
@@ -240,12 +261,47 @@ def which(program):
 
     return None
 
+def usage():
+    print("-h, --help:                  Print this help.")
+    print("-f, --font_size <SIZE>:      Set the font size.")
+    print('-s, --smart:                 Smart mode. This makes the group size an indicator for the amount of symbols instead of words')
+    print('-g, --group_size <SIZE>:     Group size. In smart mode, this is the amount of symbols. In normal mode, this is the amount of words')
+    print('')
+    print('Press left to decrease WPM, press right to increase WPM.')
+    print('Press R to restart.')
+    print('Press space bar to pause.')
+    print('Press escape to stop.')
+
 if __name__ == "__main__":
     if which('xclip') == None:
         print("Please install xclip.")
-        exit(-1)
+        sys.exit(-1)
 
-    reader = SpeedReader()
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], 'hf:sg:', ['help', 'font_size=', 'smart', 'group_size='])
+    except getopt.GetoptError as err:
+        # print help information and exit:
+        print str(err)  # will print something like "option -a not recognized"
+        usage()
+        sys.exit(2)
+
+    font_size = 40
+    group_size = 1
+    smart = False
+    for o, a in opts:
+        if o in ('-h', '--help'):
+            usage()
+            sys.exit(0)
+        elif o in ('-f', '--font_size'):
+            font_size = int(a)
+        elif o in ('-s', '--smart'):
+            smart = True
+        elif o in ('-g', '--group_size'):
+            group_size = int(a)
+        else:
+            assert False, "unhandled option"
+
+    reader = SpeedReader(font_size, group_size, smart)
 
     if reader.get_text_size() == 0:
         print("Can't read text of zero length. Please select a text to read.")
