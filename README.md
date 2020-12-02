@@ -1,7 +1,8 @@
 # pythonspeedreader
-A simple ugly speed reader. I wrote it because there was no decent speed reader available for Linux. The other speed readers were embedded in a browser. They also had some lag.
 
-Just select text and execute the program. I myself created a shortcut for this on my keyboard.
-Execute 'pyspritz -h' to print the usage.
-Requires pygame and xclip. Written in python2.
+Just copy text and execute the program. If you have xclip installed, you can just select the text instead of copying it.
+I myself created a shortcut to execute the program, and I would suggest people to do the same if they want to experience the complete ease.
+Execute `pyspritz -h` to print the usage.
+Requires pygame and optionally xclip. Written in python3.
 
+Start with executing `python pyspritz -f 50 -s -g 22` and adjust to your liking.

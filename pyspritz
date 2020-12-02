@@ -7,6 +7,7 @@ import pygame
 import subprocess
 import sys
 import time
+import tkinter
 
 
 class Constants:
@@ -14,7 +15,13 @@ class Constants:
     GRAY = (100, 100, 100)
     RED = (255, 0, 0)
     WHITE = (255, 255, 255)
-    CONFIG = os.getenv("HOME") + "/.config/pyspritz"
+    CONFIG = ""
+
+
+if sys.platform == "win32":
+    Constants.CONFIG = os.path.expanduser("~") + "/AppData/Local/pyspritz"
+else:
+    Constants.CONFIG = os.path.expanduser("~") + "/.config/pyspritz"
 
 
 class Defaults:
@@ -34,25 +41,22 @@ class Config:
             config_file.close()
             self.wpm = config_json['wpm']
         except:
-            print 'Could not read config file. Creating a new one.'
+            print('Could not read config file. Creating a new one.')
 
     def save(self):
-        #try:
         config_file = open(Constants.CONFIG, "w")
         config_dict = {}
         config_dict['wpm'] = self.wpm
         json.dump(config_dict, config_file)
 
         config_file.close()
-        #except:
-        #    print 'Could not save config file.'
 
 class TextIterator:
     def __init__(self, text):
         self._text = text
         self._index = 0
 
-    def next(self):
+    def __next__(self):
         if self._index < self._text.size():
             ret_val = self._text[self._index]
             self._index += 1
@@ -88,7 +92,7 @@ class SimpleText(Text):
         self._text_blocks = []
         segments = [w for w in self._text.split() if w != '']
         index = 0
-        for index in range(0, (len(segments)/self._group_size) + (len(segments) % self._group_size > 0)):
+        for index in range(0, int((len(segments)/self._group_size) + (len(segments) % self._group_size > 0))):
             start = index * self._group_size
             end = min(self._group_size*(index+1), len(segments))
             self._text_blocks += [' '.join(segments[start:end])]
@@ -146,7 +150,7 @@ class UserInterface:
         pygame.display.update()
 
     def _create_render_objects(self, text):
-        part = len(text) / 3
+        part = int(len(text) / 3)
         if text[part] == ' ':
             part += 1
         first = self._font.render(text[:part], 1, Constants.GRAY)
@@ -193,9 +197,13 @@ class SpeedReader:
             return SimpleText(self.get_text_to_read(), self._config.group_size)
 
     def get_text_to_read(self):
-        text = subprocess.Popen(['xclip', '-o'], stdout=subprocess.PIPE).communicate()[0]
-        text = text.decode("utf-8").strip()
-        return text.strip()
+        if which('xclip') == None:
+            text = tkinter.Tk().clipboard_get()
+            return text
+        else:
+            text = subprocess.Popen(['xclip', '-o'], stdout=subprocess.PIPE).communicate()[0]
+            text = text.decode("utf-8").strip()
+            return text.strip()
 
     def scroll_text(self):
         self._close = False
@@ -273,15 +281,11 @@ def usage():
     print('Press escape to stop.')
 
 if __name__ == "__main__":
-    if which('xclip') == None:
-        print("Please install xclip.")
-        sys.exit(-1)
-
     try:
         opts, args = getopt.getopt(sys.argv[1:], 'hf:sg:', ['help', 'font_size=', 'smart', 'group_size='])
     except getopt.GetoptError as err:
         # print help information and exit:
-        print str(err)  # will print something like "option -a not recognized"
+        print(str(err))  # will print something like "option -a not recognized"
         usage()
         sys.exit(2)
 
