@@ -3,12 +3,16 @@
 import getopt
 import json
 import os
+import platform
 import pygame
 import subprocess
 import sys
 import time
-import tkinter
 
+if platform.python_version_tuple()[0] == 2:
+    import Tkinter
+else:
+    import tkinter
 
 class Constants:
     BLACK = (0, 0, 0)
@@ -62,6 +66,9 @@ class TextIterator:
             self._index += 1
             return ret_val
         raise StopIteration
+
+    def next(self):
+        return self.__next__()
 
 class Text:
     def __init__(self, text, group_size):
