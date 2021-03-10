@@ -169,7 +169,7 @@ class UserInterface:
         font = pygame.font.match_font('gentium')
         if font != None:
             return font
-        font = pygame.font.match_font('freeserif')
+        font = pygame.font.match_font('freesans')
         if font != None:
             return font
         return pygame.font.match_font('dejavusans')
