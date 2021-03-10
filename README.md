@@ -7,4 +7,4 @@ Requires pygame and optionally xclip. Written for python2 and python3.
 
 Start with executing `python pyspritz -f 50 -s -g 22` and adjust to your liking.
 
-<img src="https://giphy.com/gifs/O8N32Gr0EyTlZ2aLKz" width=300>
+<img src="https://media.giphy.com/media/O8N32Gr0EyTlZ2aLKz/giphy.gif" width=300>
